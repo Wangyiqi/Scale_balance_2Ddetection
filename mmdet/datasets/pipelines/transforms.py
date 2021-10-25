@@ -3,13 +3,15 @@ import copy
 import inspect
 import math
 import warnings
+import json
+from collections import Counter
 
 import cv2
 import mmcv
 import numpy as np
 from numpy import random
 
-from mmdet.core import PolygonMasks
+from mmdet.core import PolygonMasks,BitmapMasks
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
 from ..builder import PIPELINES
 
@@ -1943,6 +1945,102 @@ class CutOut:
         repr_str += f'fill_in={self.fill_in})'
         return repr_str
 
+@PIPELINES.register_module()
+class CopyPaste(object):
+    def __init__(self):
+        self.resizer = Resize(img_scale=[(480, 1333), (512, 1333), (544, 1333), (576, 1333),
+                                         (608, 1333), (640, 1333), (672, 1333), (704, 1333),
+                                         (736, 1333), (768, 1333), (800, 1333)],
+                              multiscale_mode='value',
+                              keep_ratio=True)
+        self.cropper = RandomCrop(crop_size=(50, 50))
+        self.padder = Pad(size=(50, 50))
+        # with open("/home/wyq/mmdetection_4/original_10_12.json",'r') as load_f:
+        #     self.class2scale=np.array(json.load(load_f)['scale_total'])
+        #
+        #     self.class2small=self.class2scale[:,0]+self.class2scale[:,1]
+        #     self.class2large=self.class2scale[:,3]+self.class2scale[:,4]
+
+
+    def __call__(self,results):
+        # assert 'mix_results' in results
+        # assert len(
+        #     results['mix_results']) == 1, 'MixUp only support 2 images now !'
+        #
+        # if results['mix_results'][0]['gt_bboxes'].shape[0] == 0:
+        #     # empty bbox
+        #     return results
+        #
+        # print('results:{}'.format(results))
+        # foreground = results['mix_results'][0].copy()
+        #
+        # print('foreground:{}'.format(foreground))
+        # tmp_result = results.pop('mix_results').copy()
+        #
+        # print('tmp_result:{}'.format(tmp_result))
+        #target_size = (tmp_result['img'])
+
+        tmp_result = results[0].copy()
+        foreground = results[1].copy()
+        target_size = (tmp_result['img'].shape[0], tmp_result['img'].shape[1])
+        #maxlabel=Counter(foreground['gt_labels']).most_common(1)[0][0]
+
+        if not foreground['gt_bboxes'].shape[0] > 0:
+            return tmp_result
+        # select_instance_indexes = random.choice(range(foreground['gt_bboxes'].shape[0]),
+        #                                         max(1, random.randint(foreground['gt_bboxes'].shape[0] + 1)),
+        #                                         replace=False)
+
+        foreground_select_bboxes=foreground['gt_bboxes']
+        gt_w = (foreground_select_bboxes[:, 2] - foreground_select_bboxes[:, 0])
+        gt_h = (foreground_select_bboxes[:, 3] - foreground_select_bboxes[:, 1])
+
+        gt_area = gt_w * gt_h
+        gt_area_mean = np.mean(gt_area)
+
+        #print('gt_area_mean:{}'.format(gt_area_mean))
+
+
+        if gt_area_mean>128*128:
+            foreground['scale'] = random.rand() * 0.4 + 0.1
+        # elif self.class2small[maxlabel]-self.class2large[maxlabel]>0.1:
+        #     foreground['scale'] = random.rand() * 0.5 + 1.5
+        else:
+            foreground['scale'] = random.rand() * 2.0 + 2.0
+
+        foreground = self.resizer(foreground)
+
+        self.cropper.crop_size = target_size
+        foreground = self.cropper(foreground)
+        if foreground is None:
+            return tmp_result
+        self.padder.size = target_size
+        foreground = self.padder(foreground)
+        if not foreground['gt_bboxes'].shape[0] > 0:
+            return tmp_result
+        select_instance_indexes = random.choice(range(foreground['gt_bboxes'].shape[0]),
+                                                max(1, random.randint(foreground['gt_bboxes'].shape[0] + 1)),
+                                                replace=False)
+        foreground_mask = foreground['gt_masks'].masks[select_instance_indexes].max(axis=0)
+        if foreground_mask.sum() > 0:
+            background_mask = 1 - foreground_mask
+            tmp_result['img'] = tmp_result['img'] * background_mask[:, :, None] \
+                                + foreground['img'] * foreground_mask[:, :, None]
+            tmp_result['gt_bboxes'] = np.concatenate([tmp_result['gt_bboxes'],
+                                                      foreground['gt_bboxes'][select_instance_indexes]],
+                                                     axis=0)
+            tmp_result['gt_labels'] = np.concatenate([tmp_result['gt_labels'],
+                                                      foreground['gt_labels'][select_instance_indexes]],
+                                                     axis=0)
+            tmp_result['gt_masks'] = BitmapMasks(
+                np.concatenate([tmp_result['gt_masks'].masks * background_mask[None, :, :],
+                                foreground['gt_masks'].masks[select_instance_indexes]],
+                               axis=0), target_size[0], target_size[1])
+            for key in tmp_result.get('seg_fields', []):
+                tmp_result[key] = tmp_result[key] * background_mask + foreground[key] * foreground_mask
+        # vis(tmp_result,'dst')
+        return tmp_result
+
 
 @PIPELINES.register_module()
 class Mosaic:
@@ -2395,7 +2493,9 @@ class MixUp:
             mixup_gt_labels = np.concatenate(
                 (results['gt_labels'], retrieve_gt_labels), axis=0)
 
+            
             results['img'] = mixup_img
+
             results['img_shape'] = mixup_img.shape
             results['gt_bboxes'] = mixup_gt_bboxes
             results['gt_labels'] = mixup_gt_labels

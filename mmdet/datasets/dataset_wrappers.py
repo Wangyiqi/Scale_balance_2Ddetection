@@ -392,3 +392,4 @@ class MultiImageMixDataset:
         """
         assert isinstance(dynamic_scale, tuple)
         self._dynamic_scale = dynamic_scale
+        

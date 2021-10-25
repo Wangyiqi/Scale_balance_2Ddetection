@@ -2,9 +2,13 @@
 import warnings
 
 import torch
+from torch.autograd import Variable
 
 from ..builder import DETECTORS, build_backbone, build_head, build_neck
 from .base import BaseDetector
+
+import numpy as np
+from json import dumps
 
 
 @DETECTORS.register_module()
@@ -52,6 +56,8 @@ class TwoStageDetector(BaseDetector):
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
 
+        self.class_gt_to_level = torch.zeros([80, 5]).cuda()
+
     @property
     def with_rpn(self):
         """bool: whether the detector has RPN"""
@@ -86,6 +92,23 @@ class TwoStageDetector(BaseDetector):
         roi_outs = self.roi_head.forward_dummy(x, proposals)
         outs = outs + (roi_outs, )
         return outs
+    def set_class_gt_to_level(self,gt_area,gt_labels):
+        # print("gt_area:{}".format(gt_area))
+        # print("gt_labels:{}".format(gt_labels))
+       # print("gt_labels:{}".format(gt_labels))
+        #print("gt_area.shape:{}".format(gt_area.shape))
+        for _gt_area,_gt_labels in zip(gt_area,gt_labels):
+
+            if _gt_area >0 and _gt_area<=32*32:
+                self.class_gt_to_level[_gt_labels,0]+=1
+            elif _gt_area >32*32 and _gt_area<=64*64:
+                self.class_gt_to_level[_gt_labels,1]+=1
+            elif _gt_area >64*64 and _gt_area<=128*128:
+                self.class_gt_to_level[_gt_labels,2]+=1
+            elif _gt_area >128*128 and _gt_area<=256*256:
+                self.class_gt_to_level[_gt_labels,3]+=1
+            elif _gt_area >256*256 and _gt_area<=np.inf:
+                self.class_gt_to_level[_gt_labels,4]+=1
 
     def forward_train(self,
                       img,
@@ -128,7 +151,25 @@ class TwoStageDetector(BaseDetector):
 
         losses = dict()
 
-        # RPN forward and loss
+        for i in range(len(gt_bboxes)):
+            #gt_bboxes[i]=gt_bboxes[i].
+
+            if len(gt_bboxes[i]) > 0:
+                gt_bboxes_numpy = gt_bboxes[i].cpu().detach().numpy()
+
+                #print("gt_bboxes[i]:{}".format(gt_bboxes[i])) img_metas[i]['scale_factor'][0]
+                gt_w=(gt_bboxes_numpy[:,2]-gt_bboxes_numpy[:,0])/img_metas[i]['scale_factor'][0]
+                gt_h = (gt_bboxes_numpy[:, 3]- gt_bboxes_numpy[:, 1])/img_metas[i]['scale_factor'][0]
+
+                gt_area=gt_w*gt_h
+
+                #print("gt_area:{}".format(gt_area))
+
+                self.set_class_gt_to_level(gt_area,gt_labels[i])
+
+        #print("class_gt_to_level:{}".format(self.class_gt_to_level))
+
+        #RPN forward and loss
         if self.with_rpn:
             proposal_cfg = self.train_cfg.get('rpn_proposal',
                                               self.test_cfg.rpn)
@@ -150,6 +191,16 @@ class TwoStageDetector(BaseDetector):
                                                  **kwargs)
         losses.update(roi_losses)
 
+        # loss_cls = torch.zeros(1)
+        #
+        # loss_cls = Variable(loss_cls, requires_grad=True).cuda()
+        #
+        # loss_bbox = torch.zeros(1)
+        # loss_bbox = Variable(loss_bbox, requires_grad=True).cuda()
+        #
+        # zero_loss = dict(loss_cls=loss_cls, loss_bbox=loss_bbox)
+        # losses.update(zero_loss)
+
         return losses
 
     async def async_simple_test(self,
@@ -158,6 +209,22 @@ class TwoStageDetector(BaseDetector):
                                 proposals=None,
                                 rescale=False):
         """Async test without augmentation."""
+
+        A = {}
+        self.total = (self.class_gt_to_level.sum(dim=1)) + 1
+        # self.total=self.total.unsqueeze(1)
+        self.total_2 = (1 / self.total).unsqueeze(1)
+        self.class2level_scale = self.class_gt_to_level * self.total_2
+
+        A['scale_total'] = torch.cat((self.class2level_scale, self.total.unsqueeze(1)), dim=1).cpu().numpy().tolist()
+
+        json_data = dumps(A, indent=4)
+
+        print("A:{}".format(A))
+
+        with open('copypaste_large_balance_faster_rcnn_10_25.json', 'w') as json_file:
+            json_file.write(json_data)
+
         assert self.with_bbox, 'Bbox head must be implemented.'
         x = self.extract_feat(img)
 
@@ -172,6 +239,21 @@ class TwoStageDetector(BaseDetector):
 
     def simple_test(self, img, img_metas, proposals=None, rescale=False):
         """Test without augmentation."""
+
+        A = {}
+        self.total = (self.class_gt_to_level.sum(dim=1)) + 1
+        # self.total=self.total.unsqueeze(1)
+        self.total_2 = (1 / self.total).unsqueeze(1)
+        self.class2level_scale = self.class_gt_to_level * self.total_2
+
+        A['scale_total'] = torch.cat((self.class2level_scale, self.total.unsqueeze(1)), dim=1).cpu().numpy().tolist()
+
+        json_data = dumps(A, indent=4)
+
+        #print("A:{}".format(A))
+
+        with open('copypaste_large_balance_faster_rcnn_10_25.json', 'w') as json_file:
+            json_file.write(json_data)
 
         assert self.with_bbox, 'Bbox head must be implemented.'
         x = self.extract_feat(img)
@@ -189,6 +271,22 @@ class TwoStageDetector(BaseDetector):
         If rescale is False, then returned bboxes and masks will fit the scale
         of imgs[0].
         """
+
+        A = {}
+        self.total = (self.class_gt_to_level.sum(dim=1)) + 1
+        # self.total=self.total.unsqueeze(1)
+        self.total_2 = (1 / self.total).unsqueeze(1)
+        self.class2level_scale = self.class_gt_to_level * self.total_2
+
+        A['scale_total'] = torch.cat((self.class2level_scale, self.total.unsqueeze(1)), dim=1).cpu().numpy().tolist()
+
+        json_data = dumps(A, indent=4)
+
+        #print("A:{}".format(A))
+
+        with open('copypaste_large_balance_faster_rcnn_10_25.json', 'w') as json_file:
+            json_file.write(json_data)
+
         x = self.extract_feats(imgs)
         proposal_list = self.rpn_head.aug_test_rpn(x, img_metas)
         return self.roi_head.aug_test(
