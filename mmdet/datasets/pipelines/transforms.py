@@ -2012,6 +2012,8 @@ class CopyPaste(object):
 
         foreground = self.resizer(foreground)
 
+
+
         self.cropper.crop_size = target_size
         foreground = self.cropper(foreground)
         if foreground is None:
