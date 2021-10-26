@@ -1955,41 +1955,16 @@ class CopyPaste(object):
                               keep_ratio=True)
         self.cropper = RandomCrop(crop_size=(50, 50))
         self.padder = Pad(size=(50, 50))
-        # with open("/home/wyq/mmdetection_4/original_10_12.json",'r') as load_f:
-        #     self.class2scale=np.array(json.load(load_f)['scale_total'])
-        #
-        #     self.class2small=self.class2scale[:,0]+self.class2scale[:,1]
-        #     self.class2large=self.class2scale[:,3]+self.class2scale[:,4]
 
 
     def __call__(self,results):
-        # assert 'mix_results' in results
-        # assert len(
-        #     results['mix_results']) == 1, 'MixUp only support 2 images now !'
-        #
-        # if results['mix_results'][0]['gt_bboxes'].shape[0] == 0:
-        #     # empty bbox
-        #     return results
-        #
-        # print('results:{}'.format(results))
-        # foreground = results['mix_results'][0].copy()
-        #
-        # print('foreground:{}'.format(foreground))
-        # tmp_result = results.pop('mix_results').copy()
-        #
-        # print('tmp_result:{}'.format(tmp_result))
-        #target_size = (tmp_result['img'])
 
         tmp_result = results[0].copy()
         foreground = results[1].copy()
         target_size = (tmp_result['img'].shape[0], tmp_result['img'].shape[1])
-        #maxlabel=Counter(foreground['gt_labels']).most_common(1)[0][0]
 
         if not foreground['gt_bboxes'].shape[0] > 0:
             return tmp_result
-        # select_instance_indexes = random.choice(range(foreground['gt_bboxes'].shape[0]),
-        #                                         max(1, random.randint(foreground['gt_bboxes'].shape[0] + 1)),
-        #                                         replace=False)
 
         foreground_select_bboxes=foreground['gt_bboxes']
         gt_w = (foreground_select_bboxes[:, 2] - foreground_select_bboxes[:, 0])
@@ -2002,13 +1977,9 @@ class CopyPaste(object):
 
 
         if gt_area_mean>128*128:
-            #foreground['scale'] = random.rand() * 0.4 + 0.1
-            #foreground['scale'] = random.rand() * np.sqrt(gt_area_mean/128) + 0.025
-            foreground['scale'] = np.sqrt(random.uniform(10*10,128*128)/gt_area_mean )
-        # elif self.class2small[maxlabel]-self.class2large[maxlabel]>0.1:
-        #     foreground['scale'] = random.rand() * 0.5 + 1.5
+            foreground['scale'] = np.sqrt(random.uniform(10*10,64*64)/gt_area_mean )
         else:
-            foreground['scale'] = np.sqrt(random.uniform(128*128,512*512)/gt_area_mean)
+            foreground['scale'] = np.sqrt(random.uniform(256*256,512*512)/gt_area_mean)
 
         foreground = self.resizer(foreground)
 
@@ -2042,6 +2013,141 @@ class CopyPaste(object):
                                axis=0), target_size[0], target_size[1])
             for key in tmp_result.get('seg_fields', []):
                 tmp_result[key] = tmp_result[key] * background_mask + foreground[key] * foreground_mask
+        # vis(tmp_result,'dst')
+        return tmp_result
+
+@PIPELINES.register_module()
+class CopyPasteV1(object):
+    def __init__(self):
+        self.resizer = Resize(img_scale=[(480, 1333), (512, 1333), (544, 1333), (576, 1333),
+                                         (608, 1333), (640, 1333), (672, 1333), (704, 1333),
+                                         (736, 1333), (768, 1333), (800, 1333)],
+                              multiscale_mode='value',
+                              keep_ratio=True)
+        self.cropper = RandomCrop(crop_size=(50, 50))
+        self.padder = Pad(size=(50, 50))
+
+    def norm_sampling(self,search_space):
+        # 随机生成点
+        search_x_left, search_y_left, search_x_right, search_y_right = search_space
+        new_bbox_x_center = random.randint(search_x_left, search_x_right)
+        new_bbox_y_center = random.randint(search_y_left, search_y_right)
+        return [new_bbox_x_center, new_bbox_y_center]
+    def sampling_new_bbox_center_point(self,img, bbox):
+        #### sampling space ####
+        width, height, nc = img.shape
+        x_left, y_left, x_right, y_right = bbox
+        #bbox_w, bbox_h = x_right - x_left, y_right - y_left
+        ### left top ###
+        if x_left <= width / 2:
+            search_x_left, search_y_left, search_x_right, search_y_right = width * 0.6, height / 2, width * 0.75, height * 0.75
+        if x_left > width / 2:
+            search_x_left, search_y_left, search_x_right, search_y_right = width * 0.25, height / 2, width * 0.5, height * 0.75
+        return [search_x_left, search_y_left, search_x_right, search_y_right]
+
+    def random_add_patches(self,img,all_bboxes,bbox):
+        bbox_height=bbox[3]-bbox[1]
+        bbox_width=bbox[2]-bbox[0]
+        roi_area=bbox_height*bbox_width
+        rescale_bboxes=[]
+
+
+        random_area=np.array([random.uniform(20*20,32*32),
+                             random.uniform(32*32,64*64),
+                             random.uniform(64*64,128*128),
+                             random.uniform(128*128,256*256),
+                             random.uniform(256*256,512*512)])
+        self.scale=np.sqrt(random_area/roi_area)
+
+        self.weight=bbox_width*self.scale
+        self.height=bbox_height*self.scale
+
+        if roi_area >0 and roi_area <= 32*32:
+            self.weight[0]=1
+        elif roi_area >32*32 and roi_area <= 64*64:
+            self.weight[1]=1
+        elif roi_area > 64*64 and roi_area <128*128:
+            self.weight[2]=1
+        elif roi_area > 128 * 128 and roi_area <= 256 * 256:
+            self.weight[3]=1
+        elif roi_area >= 256 * 256:
+            self.weight[4] = 1
+        for i in range(len(self.weight)):
+
+            #if self.weight[i]!=1:
+            center_search_space=self.sampling_new_bbox_center_point(img,bbox)
+            new_bbox_x_center,new_bbox_y_center = self.norm_sampling(center_search_space)
+
+            new_bbox_x_left, new_bbox_y_left, new_bbox_x_right, new_bbox_y_right = new_bbox_x_center - 0.5 * self.weight[i], \
+                                                                                   new_bbox_y_center - 0.5 * self.height[i], \
+                                                                                   new_bbox_x_center + 0.5 * self.weight[i], \
+                                                                                   new_bbox_y_center + 0.5 * self.height[i]
+            new_bbox = [int(new_bbox_x_left), int(new_bbox_y_left), int(new_bbox_x_right),
+                        int(new_bbox_y_right)]
+            ious = bbox_overlaps(np.array(new_bbox)[None,:], all_bboxes)
+            all_bboxes=np.concatenate((all_bboxes,np.array(new_bbox)[None,:]),axis=0)
+
+            if max(ious[0]) <= 0.5:
+                new_bbox[0::2] = np.clip(new_bbox[0::2], 0, img.shape[1])
+                new_bbox[1::2] = np.clip(new_bbox[1::2], 0, img.shape[0])
+                rescale_bboxes.append(new_bbox)
+            else:
+                continue
+
+
+        return rescale_bboxes,roi_area
+
+
+
+    def __call__(self,results):
+
+        tmp_result = results[0].copy()
+        foreground = results[1].copy()
+        target_size = (tmp_result['img'].shape[0], tmp_result['img'].shape[1])
+
+        select_instance_indexes = random.choice(range(foreground['gt_bboxes'].shape[0]),
+                                                max(1, random.randint(foreground['gt_bboxes'].shape[0] + 1)),
+                                                replace=False)
+
+        new_gt_labels = []
+        new_bboxes=[]
+        for foreground_bbox, foreground_label in zip(foreground['gt_bboxes'][select_instance_indexes], foreground['gt_labels'][select_instance_indexes]):
+            foreground_roi = foreground['img'][int(foreground_bbox[1]):int(foreground_bbox[3]), int(foreground_bbox[0]):int(foreground_bbox[2]), :]
+            foreground_rescale_bboxes, roi_area = self.random_add_patches(tmp_result['img'], foreground['gt_bboxes'], foreground_bbox)
+
+            _new_bboxes = []
+
+            for i, rescale_bbox in enumerate(foreground_rescale_bboxes):
+                x1 = int(rescale_bbox[0])
+                y1 = int(rescale_bbox[1])
+                x2 = int(rescale_bbox[2])
+                y2 = int(rescale_bbox[3])
+                rescale_w = x2 - x1
+                rescale_h = y2 - y1
+                _rescale_bboxes_area = rescale_w * rescale_h
+
+                if rescale_h > 0 and rescale_w > 0:
+                    _new_bboxes.append(rescale_bbox)
+                    if abs(_rescale_bboxes_area - roi_area) > 100:
+                        # rescale_roi=cv2.resize(roi,(rescale_w,rescale_h))
+                        rescale_roi, w_scale, h_scale = mmcv.imresize(
+                            foreground_roi,
+                            (rescale_w, rescale_h),
+                            return_scale=True, )
+
+                        tmp_result['img'][y1:y2, x1:x2, :] = 0.8 * rescale_roi + 0.2 * tmp_result['img'][y1:y2, x1:x2, :]
+
+                gt_label_list = ([foreground_label for i in range(len(_new_bboxes))])
+
+            new_bboxes.extend(_new_bboxes)
+            new_gt_labels.extend(gt_label_list)
+
+        tmp_result['gt_bboxes'] = np.concatenate([tmp_result['gt_bboxes'],
+                                                  np.array(new_bboxes,dtype=np.float32)],
+                                                 axis=0)
+        tmp_result['gt_labels'] = np.concatenate([tmp_result['gt_labels'],
+                                                  np.array(new_gt_labels)],
+                                                 axis=0)
         # vis(tmp_result,'dst')
         return tmp_result
 
