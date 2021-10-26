@@ -252,7 +252,7 @@ class TwoStageDetector(BaseDetector):
 
         #print("A:{}".format(A))
 
-        with open('copypaste_large_balance_faster_rcnn_10_26.json', 'w') as json_file:
+        with open('copypaste_large_balance_faster_rcnn_10_27.json', 'w') as json_file:
             json_file.write(json_data)
 
         assert self.with_bbox, 'Bbox head must be implemented.'

@@ -2142,12 +2142,15 @@ class CopyPasteV1(object):
             new_bboxes.extend(_new_bboxes)
             new_gt_labels.extend(gt_label_list)
 
-        tmp_result['gt_bboxes'] = np.concatenate([tmp_result['gt_bboxes'],
-                                                  np.array(new_bboxes,dtype=np.float32)],
-                                                 axis=0)
-        tmp_result['gt_labels'] = np.concatenate([tmp_result['gt_labels'],
-                                                  np.array(new_gt_labels)],
-                                                 axis=0)
+        if len(new_bboxes)>0:
+            tmp_result['gt_bboxes'] = np.concatenate([tmp_result['gt_bboxes'],
+                                                      np.array(new_bboxes,dtype=np.float32)],
+                                                     axis=0)
+            # print("tmp_result['gt_labels'].shape:{}".format(tmp_result['gt_labels'].shape))
+            # print(" np.array(new_gt_labels):{}".format(np.array(new_gt_labels).shape))
+            tmp_result['gt_labels'] = np.concatenate([tmp_result['gt_labels'],
+                                                      np.array(new_gt_labels)],
+                                                     axis=0)
         # vis(tmp_result,'dst')
         return tmp_result
 
