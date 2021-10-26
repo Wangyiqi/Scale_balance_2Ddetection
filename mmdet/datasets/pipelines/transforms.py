@@ -2004,11 +2004,11 @@ class CopyPaste(object):
         if gt_area_mean>128*128:
             #foreground['scale'] = random.rand() * 0.4 + 0.1
             #foreground['scale'] = random.rand() * np.sqrt(gt_area_mean/128) + 0.025
-            foreground['scale'] = np.sqrt(gt_area_mean /random.uniform(10*10,128*128))
+            foreground['scale'] = np.sqrt(random.uniform(10*10,128*128)/gt_area_mean )
         # elif self.class2small[maxlabel]-self.class2large[maxlabel]>0.1:
         #     foreground['scale'] = random.rand() * 0.5 + 1.5
         else:
-            foreground['scale'] = np.sqrt(gt_area_mean /random.uniform(128*128,512*512))
+            foreground['scale'] = np.sqrt(random.uniform(128*128,512*512)/gt_area_mean)
 
         foreground = self.resizer(foreground)
 
