@@ -2049,53 +2049,56 @@ class CopyPasteV1(object):
         bbox_height=bbox[3]-bbox[1]
         bbox_width=bbox[2]-bbox[0]
         roi_area=bbox_height*bbox_width
-        rescale_bboxes=[]
+        #rescale_bboxes=[]
 
 
-        random_area=np.array([random.uniform(20*20,32*32),
-                             random.uniform(32*32,64*64),
-                             random.uniform(64*64,128*128),
-                             random.uniform(128*128,256*256),
-                             random.uniform(256*256,512*512)])
-        self.scale=np.sqrt(random_area/roi_area)
+        # random_area=np.array([random.uniform(20*20,32*32),
+        #                      random.uniform(32*32,64*64),
+        #                      random.uniform(64*64,128*128),
+        #                      random.uniform(128*128,256*256),
+        #                      random.uniform(256*256,512*512)])
+        if roi_area>128*128:
+            self.scale=np.sqrt(random.uniform(20*20,64*64)/roi_area)
+        else:
+            self.scale = np.sqrt(random.uniform(256 * 256, 512 * 512) /roi_area)
 
         self.weight=bbox_width*self.scale
         self.height=bbox_height*self.scale
 
-        if roi_area >0 and roi_area <= 32*32:
-            self.weight[0]=1
-        elif roi_area >32*32 and roi_area <= 64*64:
-            self.weight[1]=1
-        elif roi_area > 64*64 and roi_area <128*128:
-            self.weight[2]=1
-        elif roi_area > 128 * 128 and roi_area <= 256 * 256:
-            self.weight[3]=1
-        elif roi_area >= 256 * 256:
-            self.weight[4] = 1
-        for i in range(len(self.weight)):
+        #rescale_bboxes.append(bbox)
+
+        # if roi_area >0 and roi_area <= 32*32:
+        #     self.weight[0]=1
+        # elif roi_area >32*32 and roi_area <= 64*64:
+        #     self.weight[1]=1
+        # elif roi_area > 64*64 and roi_area <128*128:
+        #     self.weight[2]=1
+        # elif roi_area > 128 * 128 and roi_area <= 256 * 256:
+        #     self.weight[3]=1
+        # elif roi_area >= 256 * 256:
+        #     self.weight[4] = 1
+        #for i in range(len(self.weight)):
 
             #if self.weight[i]!=1:
-            center_search_space=self.sampling_new_bbox_center_point(img,bbox)
-            new_bbox_x_center,new_bbox_y_center = self.norm_sampling(center_search_space)
+        center_search_space=self.sampling_new_bbox_center_point(img,bbox)
+        new_bbox_x_center,new_bbox_y_center = self.norm_sampling(center_search_space)
 
-            new_bbox_x_left, new_bbox_y_left, new_bbox_x_right, new_bbox_y_right = new_bbox_x_center - 0.5 * self.weight[i], \
-                                                                                   new_bbox_y_center - 0.5 * self.height[i], \
-                                                                                   new_bbox_x_center + 0.5 * self.weight[i], \
-                                                                                   new_bbox_y_center + 0.5 * self.height[i]
-            new_bbox = [int(new_bbox_x_left), int(new_bbox_y_left), int(new_bbox_x_right),
-                        int(new_bbox_y_right)]
-            ious = bbox_overlaps(np.array(new_bbox)[None,:], all_bboxes)
-            all_bboxes=np.concatenate((all_bboxes,np.array(new_bbox)[None,:]),axis=0)
+        new_bbox_x_left, new_bbox_y_left, new_bbox_x_right, new_bbox_y_right = new_bbox_x_center - 0.5 * self.weight[i], \
+                                                                               new_bbox_y_center - 0.5 * self.height[i], \
+                                                                               new_bbox_x_center + 0.5 * self.weight[i], \
+                                                                               new_bbox_y_center + 0.5 * self.height[i]
+        new_bbox = [int(new_bbox_x_left), int(new_bbox_y_left), int(new_bbox_x_right),
+                    int(new_bbox_y_right)]
+        ious = bbox_overlaps(np.array(new_bbox)[None,:], all_bboxes)
+        #all_bboxes=np.concatenate((all_bboxes,np.array(new_bbox)[None,:]),axis=0)
 
-            if max(ious[0]) <= 0.5:
-                new_bbox[0::2] = np.clip(new_bbox[0::2], 0, img.shape[1])
-                new_bbox[1::2] = np.clip(new_bbox[1::2], 0, img.shape[0])
-                rescale_bboxes.append(new_bbox)
-            else:
-                continue
+        if max(ious[0]) <= 0.5:
+            new_bbox[0::2] = np.clip(new_bbox[0::2], 0, img.shape[1])
+            new_bbox[1::2] = np.clip(new_bbox[1::2], 0, img.shape[0])
+            bbox=np.concatenate([bbox,np.array(new_bbox)],axis=0)
 
 
-        return rescale_bboxes,roi_area
+        return bbox,roi_area
 
 
 
