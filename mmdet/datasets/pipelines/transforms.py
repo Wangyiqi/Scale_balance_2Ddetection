@@ -2049,7 +2049,7 @@ class CopyPasteV1(object):
         bbox_height=bbox[3]-bbox[1]
         bbox_width=bbox[2]-bbox[0]
         roi_area=bbox_height*bbox_width
-        #rescale_bboxes=[]
+        rescale_bboxes=[]
 
 
         # random_area=np.array([random.uniform(20*20,32*32),
@@ -2065,7 +2065,9 @@ class CopyPasteV1(object):
         self.weight=bbox_width*self.scale
         self.height=bbox_height*self.scale
 
-        #rescale_bboxes.append(bbox)
+        bbox[0::2] = np.clip(bbox[0::2], 0, img.shape[1])
+        bbox[1::2] = np.clip(bbox[1::2], 0, img.shape[0])
+        rescale_bboxes.append(list(bbox))
 
         # if roi_area >0 and roi_area <= 32*32:
         #     self.weight[0]=1
@@ -2083,10 +2085,10 @@ class CopyPasteV1(object):
         center_search_space=self.sampling_new_bbox_center_point(img,bbox)
         new_bbox_x_center,new_bbox_y_center = self.norm_sampling(center_search_space)
 
-        new_bbox_x_left, new_bbox_y_left, new_bbox_x_right, new_bbox_y_right = new_bbox_x_center - 0.5 * self.weight[i], \
-                                                                               new_bbox_y_center - 0.5 * self.height[i], \
-                                                                               new_bbox_x_center + 0.5 * self.weight[i], \
-                                                                               new_bbox_y_center + 0.5 * self.height[i]
+        new_bbox_x_left, new_bbox_y_left, new_bbox_x_right, new_bbox_y_right = new_bbox_x_center - 0.5 * self.weight, \
+                                                                               new_bbox_y_center - 0.5 * self.height, \
+                                                                               new_bbox_x_center + 0.5 * self.weight, \
+                                                                               new_bbox_y_center + 0.5 * self.height
         new_bbox = [int(new_bbox_x_left), int(new_bbox_y_left), int(new_bbox_x_right),
                     int(new_bbox_y_right)]
         ious = bbox_overlaps(np.array(new_bbox)[None,:], all_bboxes)
@@ -2095,10 +2097,11 @@ class CopyPasteV1(object):
         if max(ious[0]) <= 0.5:
             new_bbox[0::2] = np.clip(new_bbox[0::2], 0, img.shape[1])
             new_bbox[1::2] = np.clip(new_bbox[1::2], 0, img.shape[0])
-            bbox=np.concatenate([bbox,np.array(new_bbox)],axis=0)
+           # bbox=np.concatenate([bbox,np.array(new_bbox)],axis=0)
+            rescale_bboxes.append(new_bbox)
 
 
-        return bbox,roi_area
+        return rescale_bboxes,roi_area
 
 
 
@@ -2128,19 +2131,19 @@ class CopyPasteV1(object):
                 rescale_w = x2 - x1
                 rescale_h = y2 - y1
                 _rescale_bboxes_area = rescale_w * rescale_h
-
+                print("rescale_w:{}".format(rescale_w))
                 if rescale_h > 0 and rescale_w > 0:
                     _new_bboxes.append(rescale_bbox)
-                    if abs(_rescale_bboxes_area - roi_area) > 100:
+                    if abs(_rescale_bboxes_area - roi_area) > 10:
                         # rescale_roi=cv2.resize(roi,(rescale_w,rescale_h))
                         rescale_roi, w_scale, h_scale = mmcv.imresize(
                             foreground_roi,
                             (rescale_w, rescale_h),
                             return_scale=True, )
-
+                        print("rescale_roi:{}".format(rescale_roi.shape))
                         tmp_result['img'][y1:y2, x1:x2, :] = 0.8 * rescale_roi + 0.2 * tmp_result['img'][y1:y2, x1:x2, :]
 
-                gt_label_list = ([foreground_label for i in range(len(_new_bboxes))])
+            gt_label_list = ([foreground_label for i in range(len(_new_bboxes))])
 
             new_bboxes.extend(_new_bboxes)
             new_gt_labels.extend(gt_label_list)
