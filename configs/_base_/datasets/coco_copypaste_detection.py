@@ -43,7 +43,7 @@ before_synthesis_load_pipeline =  [
 ]
 
 copypaste_pipeline = [
-    dict(type='CopyPasteV1')
+    dict(type='CopyPasteV2')
 ]
 
 after_synthesisi_load_pipeline= [

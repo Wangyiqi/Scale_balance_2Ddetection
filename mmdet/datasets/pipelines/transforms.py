@@ -828,6 +828,10 @@ class RandomCrop:
             if label_key in results:
                 results[label_key] = results[label_key][valid_inds]
 
+                ##copypasteV2
+                # if valid_inds:
+                #     results[label_key] = results[label_key]
+
             # mask fields, e.g. gt_masks and gt_masks_ignore
             mask_key = self.bbox2mask.get(key)
             if mask_key in results:
@@ -839,6 +843,201 @@ class RandomCrop:
 
         # crop semantic seg
         for key in results.get('seg_fields', []):
+
+            results[key] = results[key][crop_y1:crop_y2, crop_x1:crop_x2]
+
+        return results
+
+    def _get_crop_size(self, image_size):
+        """Randomly generates the absolute crop size based on `crop_type` and
+        `image_size`.
+
+        Args:
+            image_size (tuple): (h, w).
+
+        Returns:
+            crop_size (tuple): (crop_h, crop_w) in absolute pixels.
+        """
+        h, w = image_size
+        if self.crop_type == 'absolute':
+            return (min(self.crop_size[0], h), min(self.crop_size[1], w))
+        elif self.crop_type == 'absolute_range':
+            assert self.crop_size[0] <= self.crop_size[1]
+            crop_h = np.random.randint(
+                min(h, self.crop_size[0]),
+                min(h, self.crop_size[1]) + 1)
+            crop_w = np.random.randint(
+                min(w, self.crop_size[0]),
+                min(w, self.crop_size[1]) + 1)
+            return crop_h, crop_w
+        elif self.crop_type == 'relative':
+            crop_h, crop_w = self.crop_size
+            return int(h * crop_h + 0.5), int(w * crop_w + 0.5)
+        elif self.crop_type == 'relative_range':
+            crop_size = np.asarray(self.crop_size, dtype=np.float32)
+            crop_h, crop_w = crop_size + np.random.rand(2) * (1 - crop_size)
+            return int(h * crop_h + 0.5), int(w * crop_w + 0.5)
+
+    def __call__(self, results):
+        """Call function to randomly crop images, bounding boxes, masks,
+        semantic segmentation maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Randomly cropped results, 'img_shape' key in result dict is
+                updated according to crop size.
+        """
+        image_size = results['img'].shape[:2]
+        crop_size = self._get_crop_size(image_size)
+        results = self._crop_data(results, crop_size, self.allow_negative_crop)
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(crop_size={self.crop_size}, '
+        repr_str += f'crop_type={self.crop_type}, '
+        repr_str += f'allow_negative_crop={self.allow_negative_crop}, '
+        repr_str += f'bbox_clip_border={self.bbox_clip_border})'
+        return repr_str
+
+@PIPELINES.register_module()
+class RandomCropV2:
+    """Random crop the image & bboxes & masks.
+
+    The absolute `crop_size` is sampled based on `crop_type` and `image_size`,
+    then the cropped results are generated.
+
+    Args:
+        crop_size (tuple): The relative ratio or absolute pixels of
+            height and width.
+        crop_type (str, optional): one of "relative_range", "relative",
+            "absolute", "absolute_range". "relative" randomly crops
+            (h * crop_size[0], w * crop_size[1]) part from an input of size
+            (h, w). "relative_range" uniformly samples relative crop size from
+            range [crop_size[0], 1] and [crop_size[1], 1] for height and width
+            respectively. "absolute" crops from an input with absolute size
+            (crop_size[0], crop_size[1]). "absolute_range" uniformly samples
+            crop_h in range [crop_size[0], min(h, crop_size[1])] and crop_w
+            in range [crop_size[0], min(w, crop_size[1])]. Default "absolute".
+        allow_negative_crop (bool, optional): Whether to allow a crop that does
+            not contain any bbox area. Default False.
+        recompute_bbox (bool, optional): Whether to re-compute the boxes based
+            on cropped instance masks. Default False.
+        bbox_clip_border (bool, optional): Whether clip the objects outside
+            the border of the image. Defaults to True.
+
+    Note:
+        - If the image is smaller than the absolute crop size, return the
+            original image.
+        - The keys for bboxes, labels and masks must be aligned. That is,
+          `gt_bboxes` corresponds to `gt_labels` and `gt_masks`, and
+          `gt_bboxes_ignore` corresponds to `gt_labels_ignore` and
+          `gt_masks_ignore`.
+        - If the crop does not contain any gt-bbox region and
+          `allow_negative_crop` is set to False, skip this image.
+    """
+
+    def __init__(self,
+                 crop_size,
+                 crop_type='absolute',
+                 allow_negative_crop=False,
+                 recompute_bbox=False,
+                 bbox_clip_border=True):
+        if crop_type not in [
+                'relative_range', 'relative', 'absolute', 'absolute_range'
+        ]:
+            raise ValueError(f'Invalid crop_type {crop_type}.')
+        if crop_type in ['absolute', 'absolute_range']:
+            assert crop_size[0] > 0 and crop_size[1] > 0
+            assert isinstance(crop_size[0], int) and isinstance(
+                crop_size[1], int)
+        else:
+            assert 0 < crop_size[0] <= 1 and 0 < crop_size[1] <= 1
+        self.crop_size = crop_size
+        self.crop_type = crop_type
+        self.allow_negative_crop = allow_negative_crop
+        self.bbox_clip_border = bbox_clip_border
+        self.recompute_bbox = recompute_bbox
+        # The key correspondence from bboxes to labels and masks.
+        self.bbox2label = {
+            'gt_bboxes': 'gt_labels',
+            'gt_bboxes_ignore': 'gt_labels_ignore'
+        }
+        self.bbox2mask = {
+            'gt_bboxes': 'gt_masks',
+            'gt_bboxes_ignore': 'gt_masks_ignore'
+        }
+
+    def _crop_data(self, results, crop_size, allow_negative_crop):
+        """Function to randomly crop images, bounding boxes, masks, semantic
+        segmentation maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+            crop_size (tuple): Expected absolute size after cropping, (h, w).
+            allow_negative_crop (bool): Whether to allow a crop that does not
+                contain any bbox area. Default to False.
+
+        Returns:
+            dict: Randomly cropped results, 'img_shape' key in result dict is
+                updated according to crop size.
+        """
+        assert crop_size[0] > 0 and crop_size[1] > 0
+        for key in results.get('img_fields', ['img']):
+            img = results[key]
+            margin_h = max(img.shape[0] - crop_size[0], 0)
+            margin_w = max(img.shape[1] - crop_size[1], 0)
+            offset_h = np.random.randint(0, margin_h + 1)
+            offset_w = np.random.randint(0, margin_w + 1)
+            crop_y1, crop_y2 = offset_h, offset_h + crop_size[0]
+            crop_x1, crop_x2 = offset_w, offset_w + crop_size[1]
+
+            # crop the image
+            img = img[crop_y1:crop_y2, crop_x1:crop_x2, ...]
+            img_shape = img.shape
+            results[key] = img
+        results['img_shape'] = img_shape
+
+        # crop bboxes accordingly and clip to the image boundary
+        for key in results.get('bbox_fields', []):
+            # e.g. gt_bboxes and gt_bboxes_ignore
+            bbox_offset = np.array([offset_w, offset_h, offset_w, offset_h],
+                                   dtype=np.float32)
+            bboxes = results[key] - bbox_offset
+            if self.bbox_clip_border:
+                bboxes[:, 0::2] = np.clip(bboxes[:, 0::2], 0, img_shape[1])
+                bboxes[:, 1::2] = np.clip(bboxes[:, 1::2], 0, img_shape[0])
+            valid_inds = (bboxes[:, 2] > bboxes[:, 0]) & (
+                bboxes[:, 3] > bboxes[:, 1])
+            # If the crop does not contain any gt-bbox area and
+            # allow_negative_crop is False, skip this image.
+            if (key == 'gt_bboxes' and not valid_inds.any()
+                    and not allow_negative_crop):
+                return None
+            results[key] = bboxes[valid_inds, :]
+            # label fields. e.g. gt_labels and gt_labels_ignore
+            label_key = self.bbox2label.get(key)
+            if label_key in results:
+                #results[label_key] = results[label_key][valid_inds]
+
+                ##copypasteV2
+                if valid_inds:
+                    results[label_key] = results[label_key]
+
+            # mask fields, e.g. gt_masks and gt_masks_ignore
+            mask_key = self.bbox2mask.get(key)
+            if mask_key in results:
+                results[mask_key] = results[mask_key][
+                    valid_inds.nonzero()[0]].crop(
+                        np.asarray([crop_x1, crop_y1, crop_x2, crop_y2]))
+                if self.recompute_bbox:
+                    results[key] = results[mask_key].get_bboxes()
+
+        # crop semantic seg
+        for key in results.get('seg_fields', []):
+
             results[key] = results[key][crop_y1:crop_y2, crop_x1:crop_x2]
 
         return results
@@ -2017,6 +2216,85 @@ class CopyPaste(object):
         return tmp_result
 
 @PIPELINES.register_module()
+class CopyPasteV2(object):
+    def __init__(self):
+        self.resizer = Resize(img_scale=[(480, 1333), (512, 1333), (544, 1333), (576, 1333),
+                                         (608, 1333), (640, 1333), (672, 1333), (704, 1333),
+                                         (736, 1333), (768, 1333), (800, 1333)],
+                              multiscale_mode='value',
+                              keep_ratio=True)
+        self.cropper = RandomCropV2(crop_size=(50, 50))
+        self.padder = Pad(size=(50, 50))
+
+
+    def __call__(self,results):
+
+        tmp_result = results[0].copy()
+        foreground = results[1].copy()
+        target_size = (tmp_result['img'].shape[0], tmp_result['img'].shape[1])
+
+
+        if not foreground['gt_bboxes'].shape[0] > 0:
+            return tmp_result
+        select_instance_indexes = random.choice(range(foreground['gt_bboxes'].shape[0]),
+                                                max(1, random.randint(foreground['gt_bboxes'].shape[0] + 1)),
+                                                replace=False)
+
+
+        foreground_select_bboxes=foreground['gt_bboxes'][select_instance_indexes]
+        gt_w = (foreground_select_bboxes[:, 2] - foreground_select_bboxes[:, 0])
+        gt_h = (foreground_select_bboxes[:, 3] - foreground_select_bboxes[:, 1])
+        gt_area = gt_w * gt_h
+        #gt_area_mean = np.mean(gt_area)
+        for i, index in enumerate(select_instance_indexes):
+            if gt_area[i] > 128 * 128:
+                self.scale = np.sqrt(random.uniform(20 * 20, 64 * 64) / gt_area[i])
+            else:
+                self.scale = np.sqrt(random.uniform(256 * 256, 512 * 512) / gt_area[i])
+
+
+            foreground_rescale=copy.deepcopy(foreground)
+            foreground_rescale['gt_bboxes']=foreground['gt_bboxes'][index][None,:]
+            foreground_rescale['gt_masks'] = foreground['gt_masks'][index][None,:]
+            foreground_rescale['gt_labels'] = foreground['gt_labels'][index]
+            #print("valid_inds:{}".format(valid_inds))
+            #foreground_rescale['gt_labels_ignore'] = foreground['gt_labels_ignore'][index][None, :]
+            #foreground_rescale['gt_masks_ignore'] = foreground['gt_labels_ignore'][index][None, :]
+            for key in foreground.get('seg_fields', []):
+                foreground_rescale[key] = foreground[key][index][None, :]
+            foreground_rescale['scale'] = self.scale
+
+            foreground_rescale = self.resizer(foreground_rescale)
+            self.cropper.crop_size = target_size
+            foreground_rescale = self.cropper(foreground_rescale)
+
+            if foreground_rescale is None:
+                return tmp_result
+            self.padder.size = target_size
+            foreground_rescale = self.padder(foreground_rescale)
+            if not foreground_rescale['gt_bboxes'].shape[0] > 0:
+                return tmp_result
+
+            if foreground_rescale['gt_bboxes'] is not None:
+                foreground_mask = foreground_rescale['gt_masks'].masks[0]
+                if foreground_mask.sum() > 0:
+                    background_mask = 1 - foreground_mask
+                    tmp_result['img'] = tmp_result['img'] * background_mask[:, :, None] \
+                                        + foreground_rescale['img'] * foreground_mask[:, :, None]
+                    tmp_result['gt_bboxes'] = np.concatenate([tmp_result['gt_bboxes'],
+                                                              foreground_rescale['gt_bboxes']],
+                                                             axis=0)
+                    tmp_result['gt_labels'] = np.append(tmp_result['gt_labels'],
+                                                              foreground_rescale['gt_labels']
+                                                             )
+                    tmp_result['gt_masks'] = BitmapMasks(
+                        np.concatenate([tmp_result['gt_masks'].masks * background_mask[None, :, :],
+                                        foreground_rescale['gt_masks'].masks],
+                                       axis=0), target_size[0], target_size[1])
+
+        return tmp_result
+
+@PIPELINES.register_module()
 class CopyPasteV1(object):
     def __init__(self):
         self.resizer = Resize(img_scale=[(480, 1333), (512, 1333), (544, 1333), (576, 1333),
@@ -2131,7 +2409,7 @@ class CopyPasteV1(object):
                 rescale_w = x2 - x1
                 rescale_h = y2 - y1
                 _rescale_bboxes_area = rescale_w * rescale_h
-                print("rescale_w:{}".format(rescale_w))
+                #print("rescale_w:{}".format(rescale_w))
                 if rescale_h > 0 and rescale_w > 0:
                     _new_bboxes.append(rescale_bbox)
                     if abs(_rescale_bboxes_area - roi_area) > 10:
@@ -2140,7 +2418,7 @@ class CopyPasteV1(object):
                             foreground_roi,
                             (rescale_w, rescale_h),
                             return_scale=True, )
-                        print("rescale_roi:{}".format(rescale_roi.shape))
+                        #print("rescale_roi:{}".format(rescale_roi.shape))
                         tmp_result['img'][y1:y2, x1:x2, :] = 0.8 * rescale_roi + 0.2 * tmp_result['img'][y1:y2, x1:x2, :]
 
             gt_label_list = ([foreground_label for i in range(len(_new_bboxes))])

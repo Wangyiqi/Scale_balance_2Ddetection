@@ -24,5 +24,5 @@ __all__ = [
     'InstaBoost', 'RandomCenterCropPad', 'AutoAugment', 'CutOut', 'Shear',
     'Rotate', 'ColorTransform', 'EqualizeTransform', 'BrightnessTransform',
     'ContrastTransform', 'Translate', 'RandomShift', 'Mosaic', 'MixUp',
-    'RandomAffine','CopyPaste','CopyPasteV1'
+    'RandomAffine','CopyPaste','CopyPasteV1','CopyPasteV2'
 ]
