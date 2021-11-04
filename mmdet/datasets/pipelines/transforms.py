@@ -2165,20 +2165,22 @@ class CopyPaste(object):
         if not foreground['gt_bboxes'].shape[0] > 0:
             return tmp_result
 
-        foreground_select_bboxes=foreground['gt_bboxes']
-        gt_w = (foreground_select_bboxes[:, 2] - foreground_select_bboxes[:, 0])
-        gt_h = (foreground_select_bboxes[:, 3] - foreground_select_bboxes[:, 1])
-
-        gt_area = gt_w * gt_h
-        gt_area_mean = np.mean(gt_area)
+        # foreground_select_bboxes=foreground['gt_bboxes']
+        # gt_w = (foreground_select_bboxes[:, 2] - foreground_select_bboxes[:, 0])
+        # gt_h = (foreground_select_bboxes[:, 3] - foreground_select_bboxes[:, 1])
+        #
+        # gt_area = gt_w * gt_h
+        # gt_area_mean = np.mean(gt_area)
 
         #print('gt_area_mean:{}'.format(gt_area_mean))
 
 
-        if gt_area_mean>128*128:
-            foreground['scale'] = np.sqrt(random.uniform(10*10,64*64)/gt_area_mean )
-        else:
-            foreground['scale'] = np.sqrt(random.uniform(256*256,512*512)/gt_area_mean)
+        # if gt_area_mean>128*128:
+        #     foreground['scale'] = np.sqrt(random.uniform(10*10,64*64)/gt_area_mean )
+        # else:
+        #     foreground['scale'] = np.sqrt(random.uniform(256*256,512*512)/gt_area_mean)
+
+        foreground['scale'] = random.rand()*1.9 + 0.1
 
         foreground = self.resizer(foreground)
 
