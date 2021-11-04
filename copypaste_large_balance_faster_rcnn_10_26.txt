@@ -471,10 +471,15 @@ index created!
 2021-10-26 15:58:57,803 - mmdet - INFO - Epoch [1][250/14659]	lr: 9.970e-03, eta: 2 days, 18:12:58, time: 1.032, data_time: 0.054, memory: 3662, loss_rpn_cls: 0.1659, loss_rpn_bbox: 0.1185, loss_cls: 0.5287, acc: 90.9990, loss_bbox: 0.3290, loss: 1.1421
 2021-10-26 15:59:45,521 - mmdet - INFO - Epoch [1][300/14659]	lr: 1.197e-02, eta: 2 days, 14:54:59, time: 0.954, data_time: 0.055, memory: 3662, loss_rpn_cls: 0.1368, loss_rpn_bbox: 0.1017, loss_cls: 0.5464, acc: 90.7935, loss_bbox: 0.3444, loss: 1.1293
 2021-10-26 16:00:49,050 - mmdet - INFO - Epoch [1][350/14659]	lr: 1.397e-02, eta: 2 days, 14:45:57, time: 1.271, data_time: 0.070, memory: 3662, loss_rpn_cls: 0.1484, loss_rpn_bbox: 0.1078, loss_cls: 0.5542, acc: 90.1743, loss_bbox: 0.3591, loss: 1.1695
-2021-10-26 16:02:20,441 - mmdet - INFO - Epoch [1][400/14659]	lr: 1.596e-02, eta: 2 days, 18:02:45, time: 1.828, data_time: 0.057, memory: 3662, loss_rpn_cls: 0.1304, loss_rpn_bbox: 0.0988, loss_cls: 0.5589, acc: 90.0825, loss_bbox: 0.3722, loss: 1.1604
-2021-10-26 16:03:12,082 - mmdet - INFO - Epoch [1][450/14659]	lr: 1.796e-02, eta: 2 days, 16:16:47, time: 1.032, data_time: 0.066, memory: 3662, loss_rpn_cls: 0.1318, loss_rpn_bbox: 0.0990, loss_cls: 0.5826, acc: 89.7402, loss_bbox: 0.3772, loss: 1.1907
-2021-10-26 16:04:05,139 - mmdet - INFO - Epoch [1][500/14659]	lr: 1.996e-02, eta: 2 days, 15:00:21, time: 1.061, data_time: 0.068, memory: 3662, loss_rpn_cls: 0.1334, loss_rpn_bbox: 0.1022, loss_cls: 0.6041, acc: 89.0244, loss_bbox: 0.4035, loss: 1.2431
-2021-10-26 16:05:01,570 - mmdet - INFO - Epoch [1][550/14659]	lr: 2.000e-02, eta: 2 days, 14:15:47, time: 1.129, data_time: 0.075, memory: 3662, loss_rpn_cls: 0.1279, loss_rpn_bbox: 0.1119, loss_cls: 0.6225, acc: 88.2163, loss_bbox: 0.4334, loss: 1.2957
+2021-10-26 16:02:20,441 - mmdet - INFO - Epoch [1][400/14659]	lr: 1.596e-02, eta: 2 days, 18:02:45, time: 1.828, data_time: 0.057, memory/home/wyq/.conda/envs/openmmlab/lib/python3.7/multiprocessing/semaphore_tracker.py:144: UserWarning: semaphore_tracker: There appear to be 14 leaked semaphores to clean up at shutdown
+  len(cache))
+/home/wyq/.conda/envs/openmmlab/lib/python3.7/multiprocessing/semaphore_tracker.py:144: UserWarning: semaphore_tracker: There appear to be 14 leaked semaphores to clean up at shutdown
+  len(cache))
+/home/wyq/.conda/envs/openmmlab/lib/python3.7/multiprocessing/semaphore_tracker.py:144: UserWarning: semaphore_tracker: There appear to be 14 leaked semaphores to clean up at shutdown
+  len(cache))
+/home/wyq/.conda/envs/openmmlab/lib/python3.7/multiprocessing/semaphore_tracker.py:144: UserWarning: semaphore_tracker: There appear to be 14 leaked semaphores to clean up at shutdown
+  len(cache))
+loss_rpn_bbox: 0.1119, loss_cls: 0.6225, acc: 88.2163, loss_bbox: 0.4334, loss: 1.2957
 2021-10-26 16:05:52,141 - mmdet - INFO - Epoch [1][600/14659]	lr: 2.000e-02, eta: 2 days, 13:09:40, time: 1.011, data_time: 0.061, memory: 3662, loss_rpn_cls: 0.1254, loss_rpn_bbox: 0.0934, loss_cls: 0.5401, acc: 90.0464, loss_bbox: 0.3630, loss: 1.1219
 2021-10-26 16:06:41,319 - mmdet - INFO - Epoch [1][650/14659]	lr: 2.000e-02, eta: 2 days, 12:07:30, time: 0.984, data_time: 0.071, memory: 3662, loss_rpn_cls: 0.1206, loss_rpn_bbox: 0.1022, loss_cls: 0.5525, acc: 89.3618, loss_bbox: 0.3835, loss: 1.1589
 2021-10-26 16:07:39,585 - mmdet - INFO - Epoch [1][700/14659]	lr: 2.000e-02, eta: 2 days, 11:51:48, time: 1.165, data_time: 0.050, memory: 3662, loss_rpn_cls: 0.1231, loss_rpn_bbox: 0.0946, loss_cls: 0.5603, acc: 89.1533, loss_bbox: 0.3926, loss: 1.1706
@@ -876,3 +881,11 @@ subprocess.CalledProcessError: Command '['/home/wyq/.conda/envs/openmmlab/bin/py
 *****************************************
 Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
 *****************************************
+/home/wyq/.conda/envs/openmmlab/lib/python3.7/multiprocessing/semaphore_tracker.py:144: UserWarning: semaphore_tracker: There appear to be 14 leaked semaphores to clean up at shutdown
+  len(cache))
+/home/wyq/.conda/envs/openmmlab/lib/python3.7/multiprocessing/semaphore_tracker.py:144: UserWarning: semaphore_tracker: There appear to be 14 leaked semaphores to clean up at shutdown
+  len(cache))
+/home/wyq/.conda/envs/openmmlab/lib/python3.7/multiprocessing/semaphore_tracker.py:144: UserWarning: semaphore_tracker: There appear to be 14 leaked semaphores to clean up at shutdown
+  len(cache))
+/home/wyq/.conda/envs/openmmlab/lib/python3.7/multiprocessing/semaphore_tracker.py:144: UserWarning: semaphore_tracker: There appear to be 14 leaked semaphores to clean up at shutdown
+  len(cache))

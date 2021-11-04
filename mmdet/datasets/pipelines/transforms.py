@@ -2247,10 +2247,17 @@ class CopyPasteV2(object):
         gt_area = gt_w * gt_h
         #gt_area_mean = np.mean(gt_area)
         for i, index in enumerate(select_instance_indexes):
-            if gt_area[i] > 128 * 128:
-                self.scale = np.sqrt(random.uniform(20 * 20, 64 * 64) / gt_area[i])
-            else:
-                self.scale = np.sqrt(random.uniform(256 * 256, 512 * 512) / gt_area[i])
+            # if gt_area[i] > 128 * 128:
+            #     self.scale = np.sqrt(random.uniform(20 * 20, 64 * 64) / gt_area[i])
+            # else:
+            #     self.scale = np.sqrt(random.uniform(256 * 256, 512 * 512) / gt_area[i])
+
+            random_area = np.array([random.uniform(20 * 20, 32 * 32),
+                                    random.uniform(32 * 32, 64 * 64),
+                                    random.uniform(64 * 64, 128 * 128),
+                                    random.uniform(128 * 128, 256 * 256),
+                                    random.uniform(256 * 256, 512 * 512)])
+            #self.scale = np.sqrt(random_area / gt_area[i])
 
 
             foreground_rescale=copy.deepcopy(foreground)
@@ -2262,35 +2269,43 @@ class CopyPasteV2(object):
             #foreground_rescale['gt_masks_ignore'] = foreground['gt_labels_ignore'][index][None, :]
             for key in foreground.get('seg_fields', []):
                 foreground_rescale[key] = foreground[key][index][None, :]
-            foreground_rescale['scale'] = self.scale
+            for area_index in range(random_area.shape[0]):
+                #print("self.scale[scale_index]:{}".format(self.scale[scale_index]))
+                foreground_rescale['scale'] = np.sqrt(random_area[area_index] / gt_area[i])
+                if 'scale_factor' in foreground_rescale:
+                    foreground_rescale.pop('scale_factor')
+                foreground_rescale = self.resizer(foreground_rescale)
+                #print("area_1:{}".format(foreground_rescale['gt_bboxes']))
 
-            foreground_rescale = self.resizer(foreground_rescale)
-            self.cropper.crop_size = target_size
-            foreground_rescale = self.cropper(foreground_rescale)
+                self.cropper.crop_size = target_size
+                #print("target_size:{}".format(target_size))
+                foreground_rescale = self.cropper(foreground_rescale)
 
-            if foreground_rescale is None:
-                return tmp_result
-            self.padder.size = target_size
-            foreground_rescale = self.padder(foreground_rescale)
-            if not foreground_rescale['gt_bboxes'].shape[0] > 0:
-                return tmp_result
+                #print("area_2:{}".format(foreground_rescale['gt_bboxes']))
 
-            if foreground_rescale['gt_bboxes'] is not None:
-                foreground_mask = foreground_rescale['gt_masks'].masks[0]
-                if foreground_mask.sum() > 0:
-                    background_mask = 1 - foreground_mask
-                    tmp_result['img'] = tmp_result['img'] * background_mask[:, :, None] \
-                                        + foreground_rescale['img'] * foreground_mask[:, :, None]
-                    tmp_result['gt_bboxes'] = np.concatenate([tmp_result['gt_bboxes'],
-                                                              foreground_rescale['gt_bboxes']],
-                                                             axis=0)
-                    tmp_result['gt_labels'] = np.append(tmp_result['gt_labels'],
-                                                              foreground_rescale['gt_labels']
-                                                             )
-                    tmp_result['gt_masks'] = BitmapMasks(
-                        np.concatenate([tmp_result['gt_masks'].masks * background_mask[None, :, :],
-                                        foreground_rescale['gt_masks'].masks],
-                                       axis=0), target_size[0], target_size[1])
+                if foreground_rescale is None:
+                    return tmp_result
+                self.padder.size = target_size
+                foreground_rescale = self.padder(foreground_rescale)
+                if not foreground_rescale['gt_bboxes'].shape[0] > 0:
+                    return tmp_result
+
+                if foreground_rescale['gt_bboxes'] is not None:
+                    foreground_mask = foreground_rescale['gt_masks'].masks[0]
+                    if foreground_mask.sum() > 0:
+                        background_mask = 1 - foreground_mask
+                        tmp_result['img'] = tmp_result['img'] * background_mask[:, :, None] \
+                                            + foreground_rescale['img'] * foreground_mask[:, :, None]
+                        tmp_result['gt_bboxes'] = np.concatenate([tmp_result['gt_bboxes'],
+                                                                  foreground_rescale['gt_bboxes']],
+                                                                 axis=0)
+                        tmp_result['gt_labels'] = np.append(tmp_result['gt_labels'],
+                                                                  foreground_rescale['gt_labels']
+                                                                 )
+                        tmp_result['gt_masks'] = BitmapMasks(
+                            np.concatenate([tmp_result['gt_masks'].masks * background_mask[None, :, :],
+                                            foreground_rescale['gt_masks'].masks],
+                                           axis=0), target_size[0], target_size[1])
 
         return tmp_result
 
@@ -2318,7 +2333,7 @@ class CopyPasteV1(object):
         #bbox_w, bbox_h = x_right - x_left, y_right - y_left
         ### left top ###
         if x_left <= width / 2:
-            search_x_left, search_y_left, search_x_right, search_y_right = width * 0.6, height / 2, width * 0.75, height * 0.75
+            search_x_left, search_y_left, search_x_right, search_y_right = width * 0.5, height / 2, width * 0.75, height * 0.75
         if x_left > width / 2:
             search_x_left, search_y_left, search_x_right, search_y_right = width * 0.25, height / 2, width * 0.5, height * 0.75
         return [search_x_left, search_y_left, search_x_right, search_y_right]
@@ -2395,8 +2410,12 @@ class CopyPasteV1(object):
 
         new_gt_labels = []
         new_bboxes=[]
-        for foreground_bbox, foreground_label in zip(foreground['gt_bboxes'][select_instance_indexes], foreground['gt_labels'][select_instance_indexes]):
+        for foreground_bbox, foreground_label,foreground_mask in zip(foreground['gt_bboxes'][select_instance_indexes], foreground['gt_labels'][select_instance_indexes],
+                                                     foreground['gt_masks'][select_instance_indexes]):
             foreground_roi = foreground['img'][int(foreground_bbox[1]):int(foreground_bbox[3]), int(foreground_bbox[0]):int(foreground_bbox[2]), :]
+            _foreground_masks=foreground_mask[int(foreground_bbox[1]):int(foreground_bbox[3]), int(foreground_bbox[0]):int(foreground_bbox[2])]
+            foreground_roi=foreground_roi*_foreground_masks[:,:,None]
+
             foreground_rescale_bboxes, roi_area = self.random_add_patches(tmp_result['img'], foreground['gt_bboxes'], foreground_bbox)
 
             _new_bboxes = []
@@ -2419,9 +2438,13 @@ class CopyPasteV1(object):
                             (rescale_w, rescale_h),
                             return_scale=True, )
                         #print("rescale_roi:{}".format(rescale_roi.shape))
-                        tmp_result['img'][y1:y2, x1:x2, :] = 0.8 * rescale_roi + 0.2 * tmp_result['img'][y1:y2, x1:x2, :]
+                        _foreground_mask = np.where(rescale_roi>0,1,0)
+                        cv2.imwrite("_foreground_mask " + ".png", _foreground_mask*255)
+                        tmp_result['img'][y1:y2, x1:x2, :] = rescale_roi +(1-_foreground_mask)*tmp_result['img'][y1:y2, x1:x2, :]
 
             gt_label_list = ([foreground_label for i in range(len(_new_bboxes))])
+
+            cv2.imwrite("tmp_result" +".png", tmp_result['img'])
 
             new_bboxes.extend(_new_bboxes)
             new_gt_labels.extend(gt_label_list)

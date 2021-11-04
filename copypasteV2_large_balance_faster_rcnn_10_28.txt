@@ -3387,3 +3387,9 @@ subprocess.CalledProcessError: Command '['/home/wyq/.conda/envs/openmmlab/bin/py
 Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
 *****************************************
 ./tools/dist_train.sh: 行 11: :3}: 未找到命令
+/home/wyq/.conda/envs/openmmlab/lib/python3.7/multiprocessing/semaphore_tracker.py:144: UserWarning: semaphore_tracker: There appear to be 14 leaked semaphores to clean up at shutdown
+  len(cache))
+/home/wyq/.conda/envs/openmmlab/lib/python3.7/multiprocessing/semaphore_tracker.py:144: UserWarning: semaphore_tracker: There appear to be 14 leaked semaphores to clean up at shutdown
+  len(cache))
+/home/wyq/.conda/envs/openmmlab/lib/python3.7/multiprocessing/semaphore_tracker.py:144: UserWarning: semaphore_tracker: There appear to be 14 leaked semaphores to clean up at shutdown
+  len(cache))
