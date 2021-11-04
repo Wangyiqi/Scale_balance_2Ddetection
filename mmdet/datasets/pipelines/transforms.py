@@ -2352,10 +2352,14 @@ class CopyPasteV1(object):
         #                      random.uniform(64*64,128*128),
         #                      random.uniform(128*128,256*256),
         #                      random.uniform(256*256,512*512)])
-        if roi_area>128*128:
-            self.scale=np.sqrt(random.uniform(20*20,64*64)/roi_area)
-        else:
-            self.scale = np.sqrt(random.uniform(256 * 256, 512 * 512) /roi_area)
+        if roi_area<64*64:
+            self.scale=np.sqrt(random.uniform(64*64,128*128)/roi_area)
+        elif roi_area>64*64 and roi_area<128*128:
+            self.scale = np.sqrt(random.uniform(256 * 256, 312 * 312) /roi_area)
+        elif roi_area>128*128 and roi_area<256*256:
+            self.scale = np.sqrt(random.uniform(20 * 20, 64 * 64) /roi_area)
+        elif roi_area>256*256 :
+            self.scale = np.sqrt(random.uniform(64 * 64, 128 * 128) /roi_area)
 
         self.weight=bbox_width*self.scale
         self.height=bbox_height*self.scale
@@ -2410,15 +2414,17 @@ class CopyPasteV1(object):
                                                 max(1, random.randint(foreground['gt_bboxes'].shape[0] + 1)),
                                                 replace=False)
 
-        new_gt_labels = []
-        new_bboxes=[]
+
         for foreground_bbox, foreground_label,foreground_mask in zip(foreground['gt_bboxes'][select_instance_indexes], foreground['gt_labels'][select_instance_indexes],
                                                      foreground['gt_masks'][select_instance_indexes]):
-            foreground_roi = foreground['img'][int(foreground_bbox[1]):int(foreground_bbox[3]), int(foreground_bbox[0]):int(foreground_bbox[2]), :]
-            _foreground_masks=foreground_mask[int(foreground_bbox[1]):int(foreground_bbox[3]), int(foreground_bbox[0]):int(foreground_bbox[2])]
-            foreground_roi=foreground_roi*_foreground_masks[:,:,None]
 
-            foreground_rescale_bboxes, roi_area = self.random_add_patches(tmp_result['img'], foreground['gt_bboxes'], foreground_bbox)
+            # new_gt_labels = []
+            # new_bboxes = []
+            foreground_roi = foreground['img'][int(foreground_bbox[1]):int(foreground_bbox[3]), int(foreground_bbox[0]):int(foreground_bbox[2]), :]
+            #_foreground_masks=foreground_mask[int(foreground_bbox[1]):int(foreground_bbox[3]), int(foreground_bbox[0]):int(foreground_bbox[2])]
+            #foreground_roi=foreground_roi*_foreground_masks[:,:,None]
+
+            foreground_rescale_bboxes, roi_area = self.random_add_patches(tmp_result['img'], tmp_result['gt_bboxes'], foreground_bbox)
 
             _new_bboxes = []
 
@@ -2440,26 +2446,29 @@ class CopyPasteV1(object):
                             (rescale_w, rescale_h),
                             return_scale=True, )
                         #print("rescale_roi:{}".format(rescale_roi.shape))
-                        _foreground_mask = np.where(rescale_roi>0,1,0)
-                        cv2.imwrite("_foreground_mask " + ".png", _foreground_mask*255)
-                        tmp_result['img'][y1:y2, x1:x2, :] = rescale_roi +(1-_foreground_mask)*tmp_result['img'][y1:y2, x1:x2, :]
+                        #_foreground_mask = np.where(rescale_roi>0,1,0)
+                        #cv2.imwrite("rescale_roi " + str(i)+".png", rescale_roi)
+                        tmp_result['img'][y1:y2, x1:x2, :] = rescale_roi
+                                                             #+(1-_foreground_mask)*tmp_result['img'][y1:y2, x1:x2, :]
+                        #cv2.imwrite("tmp_result['img'][y1:y2, x1:x2, :] " + str(i) + ".png", tmp_result['img'][y1:y2, x1:x2, :])
 
             gt_label_list = ([foreground_label for i in range(len(_new_bboxes))])
 
-            cv2.imwrite("tmp_result" +".png", tmp_result['img'])
 
-            new_bboxes.extend(_new_bboxes)
-            new_gt_labels.extend(gt_label_list)
 
-        if len(new_bboxes)>0:
-            tmp_result['gt_bboxes'] = np.concatenate([tmp_result['gt_bboxes'],
-                                                      np.array(new_bboxes,dtype=np.float32)],
-                                                     axis=0)
-            # print("tmp_result['gt_labels'].shape:{}".format(tmp_result['gt_labels'].shape))
-            # print(" np.array(new_gt_labels):{}".format(np.array(new_gt_labels).shape))
-            tmp_result['gt_labels'] = np.concatenate([tmp_result['gt_labels'],
-                                                      np.array(new_gt_labels)],
-                                                     axis=0)
+           # new_bboxes.extend(_new_bboxes)
+            #new_gt_labels.extend(gt_label_list)
+
+            if len(_new_bboxes)>0:
+                tmp_result['gt_bboxes'] = np.concatenate([tmp_result['gt_bboxes'],
+                                                          np.array(_new_bboxes,dtype=np.float32)],
+                                                         axis=0)
+                # print("tmp_result['gt_labels'].shape:{}".format(tmp_result['gt_labels'].shape))
+                # print(" np.array(new_gt_labels):{}".format(np.array(new_gt_labels).shape))
+                tmp_result['gt_labels'] = np.concatenate([tmp_result['gt_labels'],
+                                                          np.array(gt_label_list)],
+                                                         axis=0)
+        cv2.imwrite("tmp_result" + ".png", tmp_result['img'])
         # vis(tmp_result,'dst')
         return tmp_result
 
